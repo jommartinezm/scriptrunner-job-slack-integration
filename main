@@ -1,0 +1,45 @@
+ef searchResult = get('/rest/api/2/search')
+    .queryString('jql', '"Time to first response" = breached() and project = PRIR and issueType = Incident and "Environment[Dropdown]" = PROD and status not in (Done, Closed, "Pending by User")')
+    .queryString('fields', 'project')
+    .asObject(Map)
+    .body
+
+def projectCounts = 0
+// Función para enviar un mensaje a un canal de Slack
+def sendSlackMessage(String count) {
+    def slackUrl = "https://hooks.slack.com/services/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" // Tu URL del webhook de Slack
+    // Specify the name of the Slack room you want to post to.
+    def channelName = 'piloto-incidencias-internas'   
+    // Specify the name of the user who will make the post.
+    def username = 'Spin Premia Bot'
+    def icon_emoji = ":spin_premia:"
+    // Specify the message body which is a simple string.
+    def message = ":warning: Informamos que hay $count incidente(s) fuera del SLA del First Time To Response. \n:eyes: Consulta el detalle :point_right:<https://digitalfemsa.atlassian.net/jira/servicedesk/projects/PRIR/queues/custom/773|aquí>"
+    def response = post(slackUrl)
+        .header("Content-Type", "application/json")
+        .body([
+        text: message,
+        icon_emoji: icon_emoji,
+        username: username
+        ])
+        .asString()
+
+    if (response.status == 200) {
+        println("Message sent to Slack successfully.")
+    } else {
+        println("Error sending message to Slack: ${response.status} - ${response.statusText}")
+    }
+}
+// Verificar si la solicitud fue exitosa y obtener la lista de issues
+if (searchResult && searchResult.issues) {
+    // Convertir la lista de issues a un tipo de datos compatible con Groovy
+    def issues = searchResult.issues as List<Map<String, Object>>
+    // Agrupar las issues por proyecto y contar el número de issues en cada proyecto
+    projectCounts = issues.size()
+    // Imprimir el resultado
+    println ("La cantidad de incidencias fuera del SLA es: $projectCounts")
+    // Enviar el mensaje a Slack
+    sendSlackMessage("$projectCounts")
+} else {
+    println "Error al obtener las issues del proyecto PRIR."
+}
